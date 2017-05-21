@@ -1,0 +1,499 @@
+<?xml version="1.0"?>
+<openerp>
+    <data>
+
+			<record model="ir.ui.view" id="membership_lite_members_tree">
+					<field name="name">Members</field>
+					<field name="model">res.partner</field>
+					<field name="arch" type="xml">
+							<tree string="Members">
+									<field name="name"/>
+									<field name="ml_membership_status"/>
+									<field name="ml_membership_start"/>
+									<field name="ml_membership_end"/>
+							</tree>
+					</field>
+			</record>
+
+			<record id="view_res_partner_member_filter" model="ir.ui.view">
+					<field name="name">res.partner.select</field>
+					<field name="model">res.partner</field>
+					<field name="priority">50</field>
+					<field name="arch" type="xml">
+							<search string="Membership Partners">
+									<field name="name"
+										 filter_domain="['|','|',('name','ilike',self),('parent_id','ilike',self),('ref','=',self)]"/>
+									<field name="category_id"/>
+									<field name="ml_membership_start" invisible="1"/>
+									<field name="ml_membership_end" string="End Membership Date"/>
+									<filter string="Customers" name="customer" domain="[('customer','=',1)]"/>
+									<separator/>
+									<filter string="Vendors" name="supplier" domain="[('supplier','=',1)]"/>
+									<separator/>
+									<filter name="all_non_members" domain="[('member', '=', 1), ('ml_membership_status', 'in', ['none','canceled'])]" string="All non Members" help="None/Canceled/"/>
+									<filter name="all_members" domain="[('member', '=', 1), ('ml_membership_status', 'in', ['paid','free'])]" string="All Members" help="Paid/Free"/>
+									<group expand="0" string="Group By" colspan="10" col="8">
+											<filter string=" Membership State" domain="[]" context="{'group_by':'ml_membership_status'}"/>
+											<filter string="Start Month" help="Starting Month Of Membership" domain="[]" context="{'group_by':'ml_membership_start'}"/>
+											<filter string="End Month" help="Ending Month Of Membership" domain="[]" context="{'group_by':'ml_membership_end'}"/>
+									</group>
+							</search>
+						</field>
+					</record>
+
+							<record model="ir.actions.act_window" id="action_membership_members">
+			            <field name="name">Members</field>
+			            <field name="res_model">res.partner</field>
+			            <field name="search_view_id" ref="view_res_partner_member_filter"/>
+			            <field name="context">{"search_default_all_members": 1, "default_member": True}</field>
+			            <field name="help" type="html">
+			                <p class="oe_view_nocontent_create">
+			                  Click to add a new Member
+			                </p><p>
+			                 Odoo helps you easily track all activities related to a member:
+			                 Current Membership Status, Discussions and History of Membership, etc.
+			                </p>
+			            </field>
+			        </record>
+
+							<record model="ir.ui.view" id="membership_members_tree">
+			            <field name="name">Members</field>
+			            <field name="model">res.partner</field>
+			            <field name="arch" type="xml">
+			                <tree string="Members">
+			                    <field name="name"/>
+			                    <field name="ml_membership_status"/>
+			                    <field name="ml_membership_start"/>
+			                    <field name="ml_membership_end"/>
+			                </tree>
+			            </field>
+			        </record>
+
+			        <record model="ir.actions.act_window.view" id="action_membership_members_view_tree">
+			            <field name="sequence" eval="2"/>
+			            <field name="view_mode">tree</field>
+			            <field name="view_id" ref="membership_members_tree"/>
+			            <field name="act_window_id" ref="action_membership_members"/>
+			        </record>
+
+
+
+			        <record model="ir.actions.act_window.view" id="action_membership_members_view_form">
+			            <field name="sequence" eval="3"/>
+			            <field name="view_mode">form</field>
+			            <field name="view_id" ref="base.view_partner_form"/>
+			            <field name="act_window_id" ref="action_membership_members"/>
+			        </record>
+			         <record model="ir.actions.act_window.view" id="action_membership_members_view_kanban">
+			            <field name="sequence" eval="1"/>
+			            <field name="view_mode">kanban</field>
+			            <field name="view_id" ref="base.res_partner_kanban_view"/>
+			            <field name="act_window_id" ref="action_membership_members"/>
+			        </record>
+
+							<menuitem name="Membership" id="menu_membership" sequence="10" />
+							<menuitem name="Members" id="menu_members_cat" sequence="0" parent="menu_membership"/>
+			        <menuitem name="Members" id="menu_members" sequence="0" parent="menu_members_cat" action="action_membership_members"/>
+
+							<record model="ir.ui.view" id="view_partner_form">
+			            <field name="name">res.partner.form.inherit</field>
+			            <field name="model">res.partner</field>
+			            <field name="inherit_id" ref="base.view_partner_form"/>
+			            <field name="arch" type="xml">
+			                <notebook position="inside">
+			                    <page string="Membership" attrs="{'invisible':[('member','=',False)]}">
+
+			                        <group>
+			                            <group>
+																		<field name="member" invisible="1"/>
+			                                <field name="ml_free_member"/>
+			                                <label for="ml_membership_status"/>
+			                                <div>
+			                                    <field name="ml_membership_status"/>
+			                                </div>
+																			<field name="credit_status" attrs="{'invisible': [('credit_status', '=', 0)]}" />
+			                            </group>
+			                            <group>
+																			<field name="ml_web_user" />
+																			<field name="ml_web_pass" />
+			                                <field name="ml_membership_start" attrs="{'invisible':[('ml_membership_start','=',False)]}"/>
+			                                <field name="ml_membership_end" attrs="{'invisible':[('ml_membership_end','=',False)]}"/>
+			                            </group>
+			                        </group>
+															<p></p>
+															<h2>Membership profiles</h2>
+			                        <field name="ml_membership_lines" nolabel="1" colspan="4">
+			                            <tree string="Memberships">
+			                                <field name="date"/>
+			                                <field name="ml_profile"/>
+			                                <field name="ml_price"/>
+																			<field name="ml_start"/>
+																			<field name="ml_end"/>
+			                            </tree>
+			                            <form string="Memberships">
+			                                <group col="2">
+			                                    <group>
+			                                        <field name="ml_profile"/>
+			                                        <field name="date"/>
+			                                    </group>
+			                                    <group>
+			                                        <field name="ml_price"/>
+																							<field name="ml_start"/>
+																							<field name="ml_end"/>
+			                                    </group>
+			                                </group>
+			                            </form>
+			                        </field>
+															<p></p>
+															<h2>Credit history</h2>
+															<field name="ml_credit_lines" nolabel="1" colspan="4">
+			                            <tree string="Credit history">
+			                                <field name="date"/>
+			                                <field name="ml_amount"/>
+			                                <field name="ml_payment_method"/>
+																			<field name="ml_direction"/>
+			                            </tree>
+			                            <form string="Credit history">
+			                                <group col="2">
+			                                    <group>
+																						<field name="date"/>
+						                                <field name="ml_amount"/>
+						                                <field name="ml_payment_method" attrs="{'invisible': [('ml_direction', '=', 'out')]}"/>
+																						<field name="ml_direction"/>
+																						<field name="ml_note"/>
+																						<field name="ml_transfer_id" attrs="{'invisible': [('ml_payment_method', '!=', 'paypal')]}"/>
+			                                    </group>
+			                                </group>
+			                            </form>
+			                        </field>
+
+			                    </page>
+			                </notebook>
+			            </field>
+			        </record>
+
+							<record model="ir.ui.view" id="membership_profiles_tree">
+			            <field name="name">Profiles</field>
+			            <field name="model">membership_lite.membership_profile</field>
+			            <field name="arch" type="xml">
+			                <tree string="Profiles">
+			                    <field name="name"/>
+			                    <field name="desc"/>
+			                    <field name="m_type"/>
+			                    <field name="price"/>
+			                </tree>
+			            </field>
+			        </record>
+
+							<record model="ir.ui.view" id="membership_profiles_form">
+			            <field name="name">Profiles</field>
+			            <field name="model">membership_lite.membership_profile</field>
+			            <field name="arch" type="xml">
+			                <form string="Profiles">
+												<group>
+			                    <field name="name"/>
+			                    <field name="desc"/>
+												</group>
+												<group>
+													<field name="m_type" />
+			                    <field name="duration" attrs="{'invisible': [('m_type', '=', 'fixed')]}"/>
+													<field name="start_date" attrs="{'invisible': [('m_type', '=', 'relative')]}" />
+													<field name="end_date" attrs="{'invisible': [('m_type', '=', 'relative')]}"/>
+			                    <field name="price"/>
+												</group>
+			                </form>
+			            </field>
+			        </record>
+
+							<record model="ir.actions.act_window" id="action_membership_profiles">
+			            <field name="name">Profiles</field>
+			            <field name="res_model">membership_lite.membership_profile</field>
+									<field name="view_model">tree</field>
+			            <field name="context">{}</field>
+			            <field name="help" type="html">
+			                <p class="oe_view_nocontent_create">
+			                  Click to add new membership profile
+			                </p>
+			            </field>
+			        </record>
+
+							<record model="ir.actions.act_window.view" id="action_membership_profiles_view_tree">
+			            <field name="sequence" eval="2"/>
+			            <field name="view_mode">tree</field>
+			            <field name="view_id" ref="membership_profiles_tree"/>
+			            <field name="act_window_id" ref="action_membership_profiles"/>
+			        </record>
+
+							<record model="ir.actions.act_window.view" id="action_membership_profiles_view_form">
+			            <field name="sequence" eval="2"/>
+			            <field name="view_mode">form</field>
+			            <field name="view_id" ref="membership_profiles_form"/>
+			            <field name="act_window_id" ref="action_membership_profiles"/>
+			        </record>
+							<menuitem name="Profiles" id="menu_profiles_cat" sequence="1" parent="menu_membership"/>
+							<menuitem name="Profiles" id="menu_profiles" sequence="1" parent="menu_profiles_cat" action="action_membership_profiles"/>
+
+							<record model="ir.actions.act_window" id="action_membership_resources">
+			            <field name="name">Resources</field>
+			            <field name="res_model">membership_lite.resource</field>
+									<field name="view_model">tree</field>
+			            <field name="context">{}</field>
+			            <field name="help" type="html">
+			                <p class="oe_view_nocontent_create">
+			                  Click to add new resource
+			                </p>
+			            </field>
+			        </record>
+
+							<record model="ir.ui.view" id="membership_resources_tree">
+			            <field name="name">Resources</field>
+			            <field name="model">membership_lite.resource</field>
+			            <field name="arch" type="xml">
+			                <tree string="Resources">
+			                    <field name="name"/>
+			                    <field name="desc"/>
+			                    <field name="price_class"/>
+													<field name="xtype"/>
+			                </tree>
+			            </field>
+			        </record>
+
+							<record model="ir.actions.act_window.view" id="action_membership_resources_view_tree">
+			            <field name="sequence" eval="2"/>
+			            <field name="view_mode">tree</field>
+			            <field name="view_id" ref="membership_resources_tree"/>
+			            <field name="act_window_id" ref="action_membership_resources"/>
+			        </record>
+
+							<!--<record model="ir.actions.act_window.view" id="action_membership_resources_view_form">
+			            <field name="sequence" eval="2"/>
+			            <field name="view_mode">form</field>
+			            <field name="view_id" ref="membership_resources_form"/>
+			            <field name="act_window_id" ref="action_membership_resources"/>
+			        </record>-->
+
+							<menuitem name="Resource management" id="menu_resource_cat" sequence="1" parent="menu_membership"/>
+							<menuitem name="Resources" id="menu_resources" sequence="1" parent="menu_resource_cat" action="action_membership_resources"/>
+
+							<record model="ir.actions.act_window" id="action_membership_pc">
+			            <field name="name">Pricing classes</field>
+			            <field name="res_model">membership_lite.price_class</field>
+									<field name="view_model">tree</field>
+			            <field name="context">{}</field>
+			            <field name="help" type="html">
+			                <p class="oe_view_nocontent_create">
+			                  Click to add new price class
+			                </p>
+			            </field>
+			        </record>
+
+							<record model="ir.ui.view" id="membership_pc_tree">
+			            <field name="name">Pricing classes</field>
+			            <field name="model">membership_lite.price_class</field>
+			            <field name="arch" type="xml">
+			                <tree string="Pricing classes">
+			                    <field name="name"/>
+			                    <field name="desc"/>
+			                    <field name="length"/>
+													<field name="price"/>
+			                </tree>
+			            </field>
+			        </record>
+
+							<record model="ir.actions.act_window.view" id="action_membership_pc_view_tree">
+			            <field name="sequence" eval="2"/>
+			            <field name="view_mode">tree</field>
+			            <field name="view_id" ref="membership_pc_tree"/>
+			            <field name="act_window_id" ref="action_membership_pc"/>
+			        </record>
+
+							<!--<record model="ir.actions.act_window.view" id="action_membership_pc_view_form">
+			            <field name="sequence" eval="2"/>
+			            <field name="view_mode">form</field>
+			            <field name="view_id" ref="membership_pc_form"/>
+			            <field name="act_window_id" ref="action_membership_pc"/>
+			        </record>-->
+
+							<menuitem name="Pricing classes" id="menu_pc" sequence="1" parent="menu_resource_cat" action="action_membership_pc"/>
+
+							<record model="ir.actions.act_window" id="action_membership_oh">
+			            <field name="name">Opening hours</field>
+			            <field name="res_model">membership_lite.opening_hours</field>
+									<field name="view_model">tree</field>
+			            <field name="context">{}</field>
+			            <field name="help" type="html">
+			                <p class="oe_view_nocontent_create">
+			                  Click to add opening hours
+			                </p>
+			            </field>
+			        </record>
+
+							<record model="ir.ui.view" id="membership_oh_tree">
+			            <field name="name">Opening hours</field>
+			            <field name="model">membership_lite.opening_hours</field>
+			            <field name="arch" type="xml">
+			                <tree string="Opening hours">
+			                    <field name="name"/>
+			                    <field name="hour_from" widget="float_time"/>
+			                    <field name="hour_to" widget="float_time"/>
+													<field name="xtype"/>
+													<field name="resource_id"/>
+			                </tree>
+			            </field>
+			        </record>
+
+							<record model="ir.ui.view" id="membership_oh_form">
+			            <field name="name">Opening hours</field>
+			            <field name="model">membership_lite.opening_hours</field>
+			            <field name="arch" type="xml">
+			                <form string="Opening hours">
+												<group>
+			                    <field name="name"/>
+			                    <field name="hour_from" widget="float_time"/>
+													<field name="hour_to" widget="float_time"/>
+			                    <field name="xtype" />
+													<field name="resource_id" attrs="{'invisible': [('xtype', '=', '0')]}" />
+												</group>
+			                </form>
+			            </field>
+			        </record>
+
+							<record model="ir.actions.act_window.view" id="action_membership_oh_view_tree">
+			            <field name="sequence" eval="2"/>
+			            <field name="view_mode">tree</field>
+			            <field name="view_id" ref="membership_oh_tree"/>
+			            <field name="act_window_id" ref="action_membership_oh"/>
+			        </record>
+
+							<record model="ir.actions.act_window.view" id="action_membership_oh_view_form">
+			            <field name="sequence" eval="2"/>
+			            <field name="view_mode">form</field>
+			            <field name="view_id" ref="membership_oh_form"/>
+			            <field name="act_window_id" ref="action_membership_oh"/>
+			        </record>
+
+
+							<menuitem name="Opening hours" id="menu_oh" sequence="1" parent="menu_resource_cat" action="action_membership_oh"/>
+
+							<record model="ir.actions.act_window" id="action_membership_oh_ex">
+			            <field name="name">Opening hours exceptions</field>
+			            <field name="res_model">membership_lite.oh_exceptions</field>
+									<field name="view_model">tree</field>
+			            <field name="context">{}</field>
+			            <field name="help" type="html">
+			                <p class="oe_view_nocontent_create">
+			                  Click to add opening hours exceptions
+			                </p>
+			            </field>
+			        </record>
+
+							<record model="ir.ui.view" id="membership_oh_ex_tree">
+			            <field name="name">Opening hours exceptions</field>
+			            <field name="model">membership_lite.oh_exceptions</field>
+			            <field name="arch" type="xml">
+			                <tree string="Opening hours exceptions">
+			                    <field name="date"/>
+			                    <field name="hour_from" widget="float_time"/>
+			                    <field name="hour_to" widget="float_time"/>
+													<field name="xtype"/>
+													<field name="resource_id"/>
+			                </tree>
+			            </field>
+			        </record>
+
+							<record model="ir.ui.view" id="membership_oh_ex_form">
+			            <field name="name">Opening hours</field>
+			            <field name="model">membership_lite.oh_exceptions</field>
+			            <field name="arch" type="xml">
+			                <form string="Opening hours exceptions">
+												<group>
+			                    <field name="date"/>
+			                    <field name="hour_from" widget="float_time"/>
+													<field name="hour_to" widget="float_time"/>
+			                    <field name="xtype" />
+													<field name="resource_id" attrs="{'invisible': [('xtype', '=', '0')]}" />
+												</group>
+			                </form>
+			            </field>
+			        </record>
+							<record model="ir.actions.act_window.view" id="action_membership_oh_ex_view_tree">
+			            <field name="sequence" eval="2"/>
+			            <field name="view_mode">tree</field>
+			            <field name="view_id" ref="membership_oh_ex_tree"/>
+			            <field name="act_window_id" ref="action_membership_oh_ex"/>
+			        </record>
+
+							<record model="ir.actions.act_window.view" id="action_membership_oh_ex_view_form">
+			            <field name="sequence" eval="2"/>
+			            <field name="view_mode">form</field>
+			            <field name="view_id" ref="membership_oh_ex_form"/>
+			            <field name="act_window_id" ref="action_membership_oh_ex"/>
+			        </record>
+
+
+							<menuitem name="Opening hours exceptions" id="menu_oh_ex" sequence="1" parent="menu_resource_cat" action="action_membership_oh_ex"/>
+
+							<record model="ir.actions.act_window" id="action_membership_booking">
+			            <field name="name">Booking</field>
+			            <field name="res_model">membership_lite.booking</field>
+									<field name="view_model">tree</field>
+			            <field name="context">{}</field>
+			            <field name="help" type="html">
+			                <p class="oe_view_nocontent_create">
+			                  Click to add a booking
+			                </p>
+			            </field>
+			        </record>
+
+							<record model="ir.ui.view" id="membership_booking_tree">
+			            <field name="name">Bookings</field>
+			            <field name="model">membership_lite.booking</field>
+			            <field name="arch" type="xml">
+			                <tree string="Bookings">
+			                    <field name="member_id"/>
+													<field name="day"/>
+			                    <field name="hour_from" widget="float_time"/>
+			                    <field name="hour_to" widget="float_time"/>
+													<field name="resource_id"/>
+													<field name="note"/>
+			                </tree>
+			            </field>
+			        </record>
+
+							<record model="ir.actions.act_window.view" id="action_membership_booking_view_tree">
+			            <field name="sequence" eval="2"/>
+			            <field name="view_mode">tree</field>
+			            <field name="view_id" ref="membership_booking_tree"/>
+			            <field name="act_window_id" ref="action_membership_booking"/>
+			        </record>
+
+							<record model="ir.ui.view" id="membership_booking_form">
+			            <field name="name">Bookings</field>
+			            <field name="model">membership_lite.booking</field>
+			            <field name="arch" type="xml">
+			                <form string="Booking">
+												<group>
+			                    <field name="member_id" domain="[('member', '=', True)]"/>
+													<field name="resource_id"/>
+													<field name="note"/>
+												</group>
+												<group>
+													<field name="day" />
+			                    <field name="hour_from" widget="float_time"/>
+													<field name="hour_to" widget="float_time"/>
+												</group>
+			                </form>
+			            </field>
+			        </record>
+
+							<record model="ir.actions.act_window.view" id="action_membership_booking_view_form">
+			            <field name="sequence" eval="2"/>
+			            <field name="view_mode">form</field>
+			            <field name="view_id" ref="membership_booking_form"/>
+			            <field name="act_window_id" ref="action_membership_booking"/>
+			        </record>
+
+							<menuitem name="Bookings" id="menu_bookings" sequence="1" parent="menu_resource_cat" action="action_membership_booking"/>
+
+		</data>
+</openerp>
