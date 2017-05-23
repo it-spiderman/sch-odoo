@@ -254,6 +254,8 @@
 			                    <field name="desc"/>
 			                    <field name="price_class"/>
 													<field name="xtype"/>
+													<field name="max_users"/>
+													<field name="booking_ok"/>
 			                </tree>
 			            </field>
 			        </record>
@@ -408,8 +410,9 @@
 			                <form string="Opening hours exceptions">
 												<group>
 			                    <field name="date"/>
-			                    <field name="hour_from" widget="float_time"/>
-													<field name="hour_to" widget="float_time"/>
+			                    <field name="hour_from" widget="float_time" attrs="{'invisible': [('closed', '=', True)]}"/>
+													<field name="hour_to" widget="float_time" attrs="{'invisible': [('closed', '=', True)]}"/>
+													<field name="closed" />
 			                    <field name="xtype" />
 													<field name="resource_id" attrs="{'invisible': [('xtype', '=', '0')]}" />
 												</group>

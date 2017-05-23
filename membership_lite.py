@@ -230,10 +230,92 @@ class Partner(models.Model):
 class membership_resource(models.Model):
 	_name = "membership_lite.resource"
 
+	def get_resource_for_date( self, cr, uid, vals, context=False ):
+		_logger = logging.getLogger(__name__)
+		if not vals['date']:
+			return {}
+		date_str = vals['date']
+		date = datetime.strptime(date_str, '%Y-%m-%d')
+		dow = date.weekday()
+
+		resource_ids = self.search( cr, uid, [('booking_ok', '=', True)], context=context )
+		if not resource_ids:
+			return {}
+
+		res = []
+		oh_ids = self.pool.get('membership_lite.opening_hours').search(cr, uid, [('name', '=', str(dow))], context=context)
+		if oh_ids:
+			ohs = self.pool.get('membership_lite.opening_hours').browse(cr, uid, oh_ids, context=context)
+			for oh in ohs:
+				if oh.xtype == '0':
+					res = resource_ids
+					break
+				if oh.xtype == '1':
+					res.append( oh.resource_id.id )
+
+		exceptions_ids = self.pool.get('membership_lite.oh_exceptions').search(cr, uid, [('date', '=', date_str)], context=context)
+		if exceptions_ids:
+			exceptions = self.pool.get('membership_lite.oh_exceptions').browse(cr, uid, exceptions_ids, context=context)
+			for e in exceptions:
+				if e.closed and e.xtype == '0':
+					res = []
+				if e.closed and e.xtype == '1':
+					if e.resource_id.id in res:
+						res.remove( e.resource_id.id )
+				if not e.closed and e.xtype == '0':
+					res = resource_ids
+				if not e.closed and e.xtype == '1':
+					res.append( e.resource_id.id )
+
+		ret = []
+		for r in self.browse(cr, uid, res, context=context ):
+			ret.append({'id': r.id, 'name': r.name})
+
+		return ret
+
+	def get_work_hours( self, cr, uid, vals, context=None ):
+		if not vals['date']:
+			return {'error': 'Date not provided'}
+		date_str = vals['date']
+		date = datetime.strptime(date_str, '%Y-%m-%d')
+		dow = date.weekday()
+
+		if not vals['resource']:
+			return {'error': 'Resource not provided'}
+		resource_id = vals['resource']
+
+		working_hours = []
+		oh_ids = self.pool.get('membership_lite.opening_hours').search(cr, uid, [('name', '=', str(dow))], context=context)
+		if oh_ids:
+			ohs = self.pool.get('membership_lite.opening_hours').browse(cr, uid, oh_ids, context=context)
+			wh = {}
+			for oh in ohs:
+				if oh.xtype == '0':
+					break
+				if oh.xtype == '1':
+					res.append( oh.resource_id.id )
+
+		exceptions_ids = self.pool.get('membership_lite.oh_exceptions').search(cr, uid, [('date', '=', date_str)], context=context)
+		if exceptions_ids:
+			exceptions = self.pool.get('membership_lite.oh_exceptions').browse(cr, uid, exceptions_ids, context=context)
+			for e in exceptions:
+				if e.closed and e.xtype == '0':
+					res = []
+				if e.closed and e.xtype == '1':
+					if e.resource_id.id in res:
+						res.remove( e.resource_id.id )
+				if not e.closed and e.xtype == '0':
+					res = resource_ids
+				if not e.closed and e.xtype == '1':
+					res.append( e.resource_id.id )
+
+
 	name = fields.Char( 'Name', required="1" )
 	desc = fields.Text( 'Description' )
 	price_class = fields.Many2one( 'membership_lite.price_class', string="Price class" )
 	xtype = fields.Selection([('exclusive', 'Exclusive'), ('shared', 'Shared')], string="Booking type", default="exclusive", required="1")
+	max_users = fields.Integer( 'Maximal number of users' )
+	booking_ok = fields.Boolean( 'Available for booking' )
 
 class membership_price_class(models.Model):
 	_name= "membership_lite.price_class"
@@ -257,6 +339,7 @@ class membership_oh_exceptions(models.Model):
 
 	name = fields.Char( 'Reason' )
 	date = fields.Date( 'Date' )
+	closed = fields.Boolean( 'Closed' )
 	hour_from = fields.Float( 'From' )
 	hour_to = fields.Float( 'To' )
 	xtype = fields.Selection([('0', 'All'), ('1', 'For resource')], string='Applies to', default='0', required="1")
