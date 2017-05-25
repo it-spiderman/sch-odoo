@@ -251,7 +251,8 @@ class membership_resource(models.Model):
 					res = resource_ids
 					break
 				if oh.xtype == '1':
-					res.append( oh.resource_id.id )
+					if oh.resource_id.id not in res:
+						res.append( oh.resource_id.id )
 
 		exceptions_ids = self.pool.get('membership_lite.oh_exceptions').search(cr, uid, [('date', '=', date_str)], context=context)
 		if exceptions_ids:
@@ -265,7 +266,8 @@ class membership_resource(models.Model):
 				if not e.closed and e.xtype == '0':
 					res = resource_ids
 				if not e.closed and e.xtype == '1':
-					res.append( e.resource_id.id )
+					if e.resource_id.id not in res:
+						res.append( e.resource_id.id )
 
 		ret = []
 		for r in self.browse(cr, uid, res, context=context ):
@@ -273,7 +275,16 @@ class membership_resource(models.Model):
 
 		return ret
 
-	def get_work_hours( self, cr, uid, vals, context=None ):
+	def get_name( self, cr, uid, vals, context=None ):
+		if not vals['resource']:
+			return {'error': 'Resource not provided'}
+		resource = self.browse(cr, uid, int(vals['resource']), context=None)
+		if not resource:
+			return {'name': ''}
+		return {'name': resource[0].name}
+
+	def get_hours( self, cr, uid, vals, context=None ):
+		_logger = logging.getLogger(__name__)
 		if not vals['date']:
 			return {'error': 'Date not provided'}
 		date_str = vals['date']
@@ -282,33 +293,67 @@ class membership_resource(models.Model):
 
 		if not vals['resource']:
 			return {'error': 'Resource not provided'}
-		resource_id = vals['resource']
+		resource_id = int(vals['resource'])
 
-		working_hours = []
+		wh = []
 		oh_ids = self.pool.get('membership_lite.opening_hours').search(cr, uid, [('name', '=', str(dow))], context=context)
 		if oh_ids:
 			ohs = self.pool.get('membership_lite.opening_hours').browse(cr, uid, oh_ids, context=context)
-			wh = {}
+			resource_bound = False
 			for oh in ohs:
-				if oh.xtype == '0':
-					break
-				if oh.xtype == '1':
-					res.append( oh.resource_id.id )
+				if oh.xtype == '0' and not resource_bound:
+					wh.append({'from': oh.hour_from, 'to': oh.hour_to})
+				if oh.xtype == '1' and oh.resource_id.id == resource_id:
+					if not resource_bound:
+						wh = []
+						resource_bound = True
+					wh.append({'from': oh.hour_from, 'to': oh.hour_to})
+
 
 		exceptions_ids = self.pool.get('membership_lite.oh_exceptions').search(cr, uid, [('date', '=', date_str)], context=context)
 		if exceptions_ids:
 			exceptions = self.pool.get('membership_lite.oh_exceptions').browse(cr, uid, exceptions_ids, context=context)
+			resource_bound = False
 			for e in exceptions:
-				if e.closed and e.xtype == '0':
-					res = []
-				if e.closed and e.xtype == '1':
-					if e.resource_id.id in res:
-						res.remove( e.resource_id.id )
-				if not e.closed and e.xtype == '0':
-					res = resource_ids
-				if not e.closed and e.xtype == '1':
-					res.append( e.resource_id.id )
+				if e.closed and e.xtype == '0' and not resource_bound:
+					wh = []
+				if e.closed and e.xtype == '1' and e.resource_id.id == resource_id:
+					if not resource_bound:
+						resource_bound = True
+					wh = []
+				if not e.closed and e.xtype == '0' and not resource_bound:
+					wh = []
+					wh.append({'from': e.hour_from, 'to': e.hour_to})
+				if not e.closed and e.xtype == '1' and e.resource_id.id == resource_id:
+					if not resource_bound:
+						resource_bound = True
+						wh = []
+					wh.append({'from': e.hour_from, 'to': e.hour_to})
 
+		res = {}
+		if not wh:
+			return res
+
+		start = 0
+		end = 0
+		for hour in wh:
+			if start == 0 or start > hour['from']:
+				start = hour['from']
+			if end == 0 or end < hour['to']:
+				end = hour['to']
+		res['day_start'] = start
+		res['day_end'] = end
+		res['hours'] = wh
+
+		booking_ids = self.pool.get('membership_lite.booking').search(cr, uid, [('resource_id', '=', resource_id), ('day', '=', date_str)], context=context)
+		if not booking_ids:
+			return res
+		bookings = self.pool.get('membership_lite.booking').browse(cr, uid, booking_ids, context=context)
+		booked = []
+		for booking in bookings:
+			booked.append({'from': booking.hour_from, 'to': booking.hour_to})
+		res['bookings'] = booked
+		return res
 
 	name = fields.Char( 'Name', required="1" )
 	desc = fields.Text( 'Description' )
@@ -347,6 +392,59 @@ class membership_oh_exceptions(models.Model):
 
 class membership_booking(models.Model):
 	_name = "membership_lite.booking"
+
+	def make_booking( self, cr, uid, vals, context=None ):
+		_logger = logging.getLogger(__name__)
+		date = vals['date'] if 'date' in vals else None
+		resource = vals['resource'] if 'resource' in vals else None
+		t_from = vals['from'] if 'from' in vals else None
+		t_to = vals['to'] if 'to' in vals else None
+		user_id = vals['user'] if 'user' in vals else None
+
+		if not date or not resource or not t_from or not t_to or not user_id:
+			return {'error': 'Incomplete date'}
+
+		resource = int(resource)
+		t_from = float(t_from)
+		t_to = float(t_to)
+		user_id = int(user_id)
+
+		hours = self.pool.get('membership_lite.resource').get_hours(cr, uid, {'date': date, 'resource': resource}, context=None)
+		if not hours:
+			return {'error': 'Failure to retrieve hours!'}
+		oh = hours['hours']
+		booking = hours['bookings']
+		available = False
+		for h in oh:
+			if t_from >= h['from'] and t_to <= h['to']:
+				available = True
+		if not available:
+			return {'error': 'This time is not available'}
+
+		for b in booking:
+			if ( t_from > b['from'] and t_from < b['to'] ) or ( t_to < b['to'] and t_to > b['to'] ):
+				return {'error': 'This time is not available'}
+		new_vals = {
+			'member_id': user_id,
+			'day': date,
+			'hour_from': t_from,
+			'hour_to': t_to,
+			'resource_id': resource,
+			'note': '' #IMPLEMENT
+		}
+		success = self.create(cr, uid, new_vals, context=None)
+		if not success:
+			return {'error': 'Creating booking did not succeed'}
+		new_booking = self.browse( cr, uid, success, context=None)
+
+		return {
+			'user': new_booking.member_id.name,
+			'date': new_booking.day,
+			'from': new_booking.hour_from,
+			'to': new_booking.hour_to,
+			'resource': new_booking.resource_id.name,
+			'note': new_booking.note
+		}
 
 	member_id = fields.Many2one( 'res.partner', string="Member", required="1" )
 	day = fields.Date( 'Date' )
