@@ -179,6 +179,21 @@ class Partner(models.Model):
 			'end': user.ml_membership_end
 		}
 
+	def get_info( self, cr, uid, vals, context=None ):
+		user_id = vals['user'];
+		if not user_id:
+			return {'error': 'User is not valid'}
+
+		user = self.browse(cr, uid, user_id, context=None)
+		if not user:
+			return {'error': 'User is not valid'}
+		return {
+			'status': user.ml_membership_status,
+			'credit': user.credit_status,
+			'start': user.ml_membership_start,
+			'end': user.ml_membership_end
+		}
+
 	def get_profile_info( self, cr, uid, vals, context=None ):
 		user = self.pool.get('res.partner').browse( cr, uid, vals['user_id'], context=context )
 		if not user:
@@ -345,14 +360,17 @@ class membership_resource(models.Model):
 		res['day_end'] = end
 		res['hours'] = wh
 
+		booked = []
 		booking_ids = self.pool.get('membership_lite.booking').search(cr, uid, [('resource_id', '=', resource_id), ('day', '=', date_str)], context=context)
 		if not booking_ids:
+			res['bookings'] = booked
 			return res
 		bookings = self.pool.get('membership_lite.booking').browse(cr, uid, booking_ids, context=context)
-		booked = []
+
 		for booking in bookings:
 			booked.append({'from': booking.hour_from, 'to': booking.hour_to})
 		res['bookings'] = booked
+		_logger.info(res['bookings']);
 		return res
 
 	name = fields.Char( 'Name', required="1" )
@@ -404,12 +422,21 @@ class membership_booking(models.Model):
 		if not date or not resource or not t_from or not t_to or not user_id:
 			return {'error': 'Incomplete date'}
 
-		resource = int(resource)
+		resource_id = int(resource)
+		resource = self.pool.get('membership_lite.resource').browse(cr, uid, resource_id, context=None)
+		if not resource:
+			return {'error':'Resource error'}
+
 		t_from = float(t_from)
 		t_to = float(t_to)
 		user_id = int(user_id)
 
-		hours = self.pool.get('membership_lite.resource').get_hours(cr, uid, {'date': date, 'resource': resource}, context=None)
+		user = self.pool.get('res.partner').browse(cr, uid, user_id, context=None)
+		if not user:
+			return {'error': 'User doesnt exist'}
+		user = user[0]
+
+		hours = self.pool.get('membership_lite.resource').get_hours(cr, uid, {'date': date, 'resource': resource_id}, context=None)
 		if not hours:
 			return {'error': 'Failure to retrieve hours!'}
 		oh = hours['hours']
@@ -422,18 +449,51 @@ class membership_booking(models.Model):
 			return {'error': 'This time is not available'}
 
 		for b in booking:
-			if ( t_from > b['from'] and t_from < b['to'] ) or ( t_to < b['to'] and t_to > b['to'] ):
+			if ( t_from >= b['from'] and t_from < b['to'] ) or ( t_to <= b['to'] and t_to > b['to'] ):
 				return {'error': 'This time is not available'}
+
+		duration = t_to - t_from
+		halves = duration / 0.5
+		transaction_amount = None
+		#check member for Payment
+		member_status = user.ml_membership_status
+		_logger.info("MEMBER STATUS: %s" % member_status)
+		if member_status not in ['free', 'paid']:
+			credit_status = user.credit_status
+			price = resource.price_class.price
+			length = resource.price_class.length
+			price_per_half = price * 0.5 / length
+			price_for_session = price_per_half * halves
+			_logger.info("PRICE FOR THIS: %s" % price_for_session)
+			if credit_status - price_for_session < 0:
+				return {'error': 'Not enough credit for this'}
+			#Remove credit from member_id
+			purchase_vals = {
+				'member': user.id,
+				'ml_amount': price_for_session,
+				'ml_payment_method': 'paypal',
+				'ml_direction': 'out'
+			}
+			rc_line = self.pool.get('membership_lite.credit_line').create( cr, uid, purchase_vals, context=None)
+			if rc_line:
+				transaction_amount = price_for_session
+			else:
+				return {'error': 'Error in payment'}
+
 		new_vals = {
 			'member_id': user_id,
 			'day': date,
 			'hour_from': t_from,
 			'hour_to': t_to,
-			'resource_id': resource,
+			'resource_id': resource_id,
 			'note': '' #IMPLEMENT
 		}
 		success = self.create(cr, uid, new_vals, context=None)
 		if not success:
+			if transaction_amount:
+				rolled_back = self.pool.get('membership_lite.credit_line').unlink( cr, uid, rc_line, context=None)
+				if not rolled_back:
+					self.unlink(cr, uid, success, context=None)
 			return {'error': 'Creating booking did not succeed'}
 		new_booking = self.browse( cr, uid, success, context=None)
 
