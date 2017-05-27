@@ -85,9 +85,10 @@ class Partner(models.Model):
 
 			if member.ml_free_member:
 				member.ml_membership_status = 'free'
+				break
 			m_lines = member.ml_membership_lines
 			if not m_lines:
-				member.ml_membership_status = 'none'
+				break
 			for line in m_lines:
 				today = datetime.today()
 				m_start = datetime.strptime(line.ml_start, "%Y-%m-%d")
@@ -195,6 +196,7 @@ class Partner(models.Model):
 		}
 
 	def get_profile_info( self, cr, uid, vals, context=None ):
+		_logger = logging.getLogger(__name__)
 		user = self.pool.get('res.partner').browse( cr, uid, vals['user_id'], context=context )
 		if not user:
 			return {}
@@ -205,6 +207,7 @@ class Partner(models.Model):
 		rc_lines = []
 		m_lines = user.ml_membership_lines
 		c_lines = user.ml_credit_lines
+
 		for line in m_lines:
 			rm_lines.append({
 				'date': line.date,
@@ -225,8 +228,8 @@ class Partner(models.Model):
 			})
 
 		res['m_lines'] = rm_lines
-		res['c_lines'] = rm_lines
-
+		res['c_lines'] = rc_lines
+		_logger.info(res);
 		return res
 
 
@@ -244,6 +247,48 @@ class Partner(models.Model):
 
 class membership_resource(models.Model):
 	_name = "membership_lite.resource"
+
+	def get_disabled_dates( self, cr, uid, vals, context=False ):
+		_logger = logging.getLogger(__name__)
+		today = datetime.today().date()
+
+		res = {}
+		disabled = []
+		res['start_date'] = str(today)
+		i = 0
+		while i < 30:
+			is_open = self.get_global_hours( cr, uid, {'date': str(today)}, context=None)
+			if not is_open:
+				disabled.append(str(today))
+			today = today + timedelta(days=1)
+			i += 1
+		res['end_date'] = str(today)
+		res['disabled'] = disabled
+		_logger.info(res)
+
+		return res
+
+	def get_global_hours( self, cr, uid, vals, context=False):
+		date_str = vals['date']
+		date = datetime.strptime(date_str, '%Y-%m-%d')
+		dow = date.weekday()
+		is_open = True
+		oh_ids = self.pool.get('membership_lite.opening_hours').search(cr, uid, [('name', '=', str(dow))], context=context)
+		if not oh_ids:
+			is_open = False
+
+		exceptions_ids = self.pool.get('membership_lite.oh_exceptions').search(cr, uid, [('date', '=', date_str)], context=context)
+		if not exceptions_ids:
+			return is_open
+		exceptions = self.pool.get('membership_lite.oh_exceptions').browse(cr, uid, exceptions_ids, context=context)
+		for e in exceptions:
+			if e.closed:
+				is_open = False
+			else:
+				is_open = True
+
+		return is_open
+
 
 	def get_resource_for_date( self, cr, uid, vals, context=False ):
 		_logger = logging.getLogger(__name__)
@@ -310,6 +355,28 @@ class membership_resource(models.Model):
 			return {'error': 'Resource not provided'}
 		resource_id = int(vals['resource'])
 
+		resource = self.browse(cr, uid, resource_id, context=None)
+		if not resource:
+			return {'error': 'Resource not found'}
+
+		if not vals['user']:
+			return {'error': 'User not provided'}
+		user = self.pool.get('res.partner').browse(cr, uid, vals['user'], context=None)
+		if not user:
+			return {'error': 'User not found'}
+
+		user_status = user.ml_membership_status
+		price_message = ''
+		price = 0
+		if user_status == 'free':
+			price_message = 'Price: Free'
+		elif user_status == 'paid':
+			price_message = 'Price: Included in membership'
+		else:
+			price_for_unit = resource.price_class.price * 0.5 / resource.price_class.length
+			price = price_for_unit
+			price_message = 'Price: ' + '{0:.2f}'.format(price_for_unit) + "€"
+
 		wh = []
 		oh_ids = self.pool.get('membership_lite.opening_hours').search(cr, uid, [('name', '=', str(dow))], context=context)
 		if oh_ids:
@@ -359,6 +426,8 @@ class membership_resource(models.Model):
 		res['day_start'] = start
 		res['day_end'] = end
 		res['hours'] = wh
+		res['price_message'] = price_message
+		res['price'] = price
 
 		booked = []
 		booking_ids = self.pool.get('membership_lite.booking').search(cr, uid, [('resource_id', '=', resource_id), ('day', '=', date_str)], context=context)
@@ -436,7 +505,7 @@ class membership_booking(models.Model):
 			return {'error': 'User doesnt exist'}
 		user = user[0]
 
-		hours = self.pool.get('membership_lite.resource').get_hours(cr, uid, {'date': date, 'resource': resource_id}, context=None)
+		hours = self.pool.get('membership_lite.resource').get_hours(cr, uid, {'user': user.id, 'date': date, 'resource': resource_id}, context=None)
 		if not hours:
 			return {'error': 'Failure to retrieve hours!'}
 		oh = hours['hours']
@@ -471,7 +540,7 @@ class membership_booking(models.Model):
 			purchase_vals = {
 				'member': user.id,
 				'ml_amount': price_for_session,
-				'ml_payment_method': 'paypal',
+				'ml_note': 'Purchase of %sh time for %s' % (length, resource.name),
 				'ml_direction': 'out'
 			}
 			rc_line = self.pool.get('membership_lite.credit_line').create( cr, uid, purchase_vals, context=None)
