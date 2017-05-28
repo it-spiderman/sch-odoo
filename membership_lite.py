@@ -64,6 +64,41 @@ class membership_line(models.Model):
 class credit_line(models.Model):
 	_name = 'membership_lite.credit_line'
 
+	def add_credit(self, cr, uid, vals, context=None):
+		_logger = logging.getLogger(__name__)
+		user_id = vals['user']
+		user = self.pool.get('res.partner').browse(cr, uid, user_id, context=None)
+		if not user:
+			return {'error': 'No user provided'}
+		paypal = vals['paypal']
+		if not paypal:
+			return {'error': 'No paypal info provided'}
+
+		trans_id = paypal['id']
+		state = paypal['state']
+		if state != 'approved':
+			return {}
+		trans_amount = paypal['transactions'][0]['amount']
+		trans_curr = trans_amount['currency']
+		if trans_curr != 'EUR':
+			return {}
+		trans_total = float(trans_amount['total'])
+
+		xvals = {
+			'member': user.id,
+			'date': datetime.today(),
+			'ml_amount': trans_total,
+			'ml_payment_method': 'paypal',
+			'ml_note': "Payment id: %s" % trans_id,
+			'ml_direction': 'in',
+			'ml_transfer_id': trans_id
+		}
+
+		tm_line = self.create(cr, uid, xvals, context=None)
+		if not tm_line:
+			return {'error': 'Line not created'}
+		return {'success': 'true'}
+
 	member = fields.Many2one('res.partner', string='Member')
 	date = fields.Datetime( 'Date', default=fields.Datetime.now())
 	ml_amount = fields.Float('Amount', required="1")
@@ -174,6 +209,9 @@ class Partner(models.Model):
 		return {
 			'id': user_id[0],
 			'name': user.name,
+			'address': "%s %s, %s %s (%s)" % (user.street or '', user.street2 or '', user.zip or '', user.city or '', user.country_id.name if user.country_id else ''),
+			'phone': "Tel: %s</br> Mobile: %s</br> Fax: %s</br>" % (user.phone or '-', user.mobile or '-', user.fax or '-'),
+			'email': user.email,
 			'status': user.ml_membership_status,
 			'credit': user.credit_status,
 			'start': user.ml_membership_start,
@@ -205,30 +243,46 @@ class Partner(models.Model):
 		res = {}
 		rm_lines = []
 		rc_lines = []
+		booking_lines = []
 		m_lines = user.ml_membership_lines
 		c_lines = user.ml_credit_lines
-
+		booking_ids = self.pool.get('membership_lite.booking').search(cr, uid, [('member_id', '=', user.id)], context=None)
+		if booking_ids:
+			bookings = self.pool.get('membership_lite.booking').browse(cr, uid, booking_ids, context=None)
+			for booking in bookings:
+				booking_lines.append({
+					'date': booking.day,
+					'from': booking.hour_from,
+					'to': booking.hour_to,
+					'resource': booking.resource_id.name,
+					'note': booking.note
+				})
 		for line in m_lines:
+			is_current = False
+			today = datetime.today().date();
+			start = datetime.strptime(line.ml_start, '%Y-%m-%d').date()
+			end = datetime.strptime(line.ml_end, '%Y-%m-%d').date()
+			if start <= today and end >= today:
+				is_current = True
 			rm_lines.append({
 				'date': line.date,
 				'profile': line.ml_profile.name,
 				'price': line.ml_price,
 				'start': line.ml_start,
-				'end': line.ml_end
+				'end': line.ml_end,
+				'is_current': is_current
 			})
 		for line in c_lines:
 			rc_lines.append({
 				'date': line.date,
-				'amount': line.ml_amount,
-				'method': line.ml_payment_method,
-				'direction': 'Buy' if line.ml_direction == 'in' else 'Spend',
-				'transfer_id': line.ml_transfer_id,
-				'note': line.ml_note,
-
+				'desc': line.ml_note,
+				'amount': line.ml_amount if line.ml_direction == 'in' else line.ml_amount * -1,
+				'method': line.ml_payment_method
 			})
 
 		res['m_lines'] = rm_lines
 		res['c_lines'] = rc_lines
+		res['booking_lines'] = booking_lines
 		_logger.info(res);
 		return res
 
