@@ -201,6 +201,9 @@
 													<field name="end_date" attrs="{'invisible': [('m_type', '=', 'relative')]}"/>
 			                    <field name="price"/>
 												</group>
+												<group string="Included resources">
+													<field name="resource_ids" widget="many2many_tags"/>
+												</group>
 			                </form>
 			            </field>
 			        </record>
@@ -252,7 +255,6 @@
 			                <tree string="Resources">
 			                    <field name="name"/>
 			                    <field name="desc"/>
-			                    <field name="price_class"/>
 													<field name="xtype"/>
 													<field name="max_users"/>
 													<field name="booking_ok"/>
@@ -277,36 +279,38 @@
 							<menuitem name="Resource management" id="menu_resource_cat" sequence="1" parent="menu_membership"/>
 							<menuitem name="Resources" id="menu_resources" sequence="1" parent="menu_resource_cat" action="action_membership_resources"/>
 
-							<record model="ir.actions.act_window" id="action_membership_pc">
-			            <field name="name">Pricing classes</field>
-			            <field name="res_model">membership_lite.price_class</field>
+							<record model="ir.actions.act_window" id="action_membership_pr">
+			            <field name="name">Pricing rules</field>
+			            <field name="res_model">membership_lite.price_rule</field>
 									<field name="view_model">tree</field>
 			            <field name="context">{}</field>
 			            <field name="help" type="html">
 			                <p class="oe_view_nocontent_create">
-			                  Click to add new price class
+			                  Click to add new price rule
 			                </p>
 			            </field>
 			        </record>
 
-							<record model="ir.ui.view" id="membership_pc_tree">
-			            <field name="name">Pricing classes</field>
-			            <field name="model">membership_lite.price_class</field>
+							<record model="ir.ui.view" id="membership_pr_tree">
+			            <field name="name">Pricing rules</field>
+			            <field name="model">membership_lite.price_rule</field>
 			            <field name="arch" type="xml">
-			                <tree string="Pricing classes">
+			                <tree string="Pricing rules">
 			                    <field name="name"/>
+													<field name="hour_from" />
+													<field name="hour_to" />
+													<field name="date" />
 			                    <field name="desc"/>
-			                    <field name="length"/>
 													<field name="price"/>
 			                </tree>
 			            </field>
 			        </record>
 
-							<record model="ir.actions.act_window.view" id="action_membership_pc_view_tree">
+							<record model="ir.actions.act_window.view" id="action_membership_pr_view_tree">
 			            <field name="sequence" eval="2"/>
 			            <field name="view_mode">tree</field>
-			            <field name="view_id" ref="membership_pc_tree"/>
-			            <field name="act_window_id" ref="action_membership_pc"/>
+			            <field name="view_id" ref="membership_pr_tree"/>
+			            <field name="act_window_id" ref="action_membership_pr"/>
 			        </record>
 
 							<!--<record model="ir.actions.act_window.view" id="action_membership_pc_view_form">
@@ -316,7 +320,49 @@
 			            <field name="act_window_id" ref="action_membership_pc"/>
 			        </record>-->
 
-							<menuitem name="Pricing classes" id="menu_pc" sequence="1" parent="menu_resource_cat" action="action_membership_pc"/>
+							<menuitem name="Pricing" id="menu_pr" sequence="1" parent="menu_membership"/>
+							<menuitem name="Pricing rules" id="menu_pr_pr" sequence="1" parent="menu_pr" action="action_membership_pr"/>
+
+							<record model="ir.actions.act_window" id="action_membership_lb">
+			            <field name="name">Long booking rules</field>
+			            <field name="res_model">membership_lite.long_booking</field>
+									<field name="view_model">tree</field>
+			            <field name="context">{}</field>
+			            <field name="help" type="html">
+			                <p class="oe_view_nocontent_create">
+			                  Click to add new long booking rule
+			                </p>
+			            </field>
+			        </record>
+
+							<record model="ir.ui.view" id="membership_lb_tree">
+			            <field name="name">Long booking rules</field>
+			            <field name="model">membership_lite.long_booking</field>
+			            <field name="arch" type="xml">
+			                <tree string="Long booking rule">
+			                    <field name="duration"/>
+													<field name="price" />
+													<field name="xtype" />
+													<field name="min_booking" />
+			                </tree>
+			            </field>
+			        </record>
+
+							<record model="ir.actions.act_window.view" id="action_membership_lb_view_tree">
+			            <field name="sequence" eval="2"/>
+			            <field name="view_mode">tree</field>
+			            <field name="view_id" ref="membership_lb_tree"/>
+			            <field name="act_window_id" ref="action_membership_lb"/>
+			        </record>
+
+							<!--<record model="ir.actions.act_window.view" id="action_membership_pc_view_form">
+			            <field name="sequence" eval="2"/>
+			            <field name="view_mode">form</field>
+			            <field name="view_id" ref="membership_pc_form"/>
+			            <field name="act_window_id" ref="action_membership_pc"/>
+			        </record>-->
+
+							<menuitem name="Long-term booking rules" id="menu_lb" sequence="1" parent="menu_pr" action="action_membership_lb"/>
 
 							<record model="ir.actions.act_window" id="action_membership_oh">
 			            <field name="name">Opening hours</field>
@@ -410,60 +456,7 @@
 			                <form string="Opening hours exceptions">
 												<group>
 			                    <field name="date"/>
-			                    <field name="hour_from" widget="float_time" attrs="{'invisible': [('closed', '=', True
-<!DOCTYPE html>
-
-<head>
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <script src="https://www.paypalobjects.com/api/checkout.js"></script>
-</head>
-
-<body>
-    <div id="paypal-button-container"></div>
-
-    <script>
-        paypal.Button.render({
-
-            env: 'sandbox', // sandbox | production
-
-            // PayPal Client IDs - replace with your own
-            // Create a PayPal app: https://developer.paypal.com/developer/applications/create
-            client: {
-                sandbox:    'AVLQNMMwfD0mK5EVCLPWPkIRg0hD_vHoMTCEca6w8K9WupjnTZkCtMbL3xF10v23xYE8mgd4novecN_K',
-                production: '<insert production client id>'
-            },
-
-            // Show the buyer a 'Pay Now' button in the checkout flow
-            commit: true,
-
-            // payment() is called when the button is clicked
-            payment: function(data, actions) {
-
-                // Make a call to the REST api to create the payment
-                return actions.payment.create({
-                    transactions: [
-                        {
-                            amount: { total: '10', currency: 'EUR' }
-                        }
-                    ]
-                });
-            },
-
-            // onAuthorize() is called when the buyer approves the payment
-            onAuthorize: function(data, actions) {
-
-                // Make a call to the REST api to execute the payment
-                return actions.payment.execute().then(function(e) {
-                    console.log(e);
-                    window.alert('Payment Complete!');
-                });
-            }
-
-        }, '#paypal-button-container');
-
-    </script>
-</body>
-    )]}"/>
+			                    <field name="hour_from" widget="float_time" attrs="{'invisible': [('closed', '=', True)]}"/>
 													<field name="hour_to" widget="float_time" attrs="{'invisible': [('closed', '=', True)]}"/>
 													<field name="closed" />
 			                    <field name="xtype" />
@@ -549,7 +542,8 @@
 			            <field name="act_window_id" ref="action_membership_booking"/>
 			        </record>
 
-							<menuitem name="Bookings" id="menu_bookings" sequence="1" parent="menu_resource_cat" action="action_membership_booking"/>
+							<menuitem name="Bookings" id="menu_bookings" sequence="1" parent="menu_membership"/>
+							<menuitem name="Bookings" id="menu_bookings_bookings" sequence="1" parent="menu_bookings" action="action_membership_booking"/>
 
 		</data>
 </openerp>

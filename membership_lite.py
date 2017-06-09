@@ -27,6 +27,10 @@ class membership_profile(models.Model):
 	start_date = fields.Date( 'Startdate' )
 	end_date = fields.Date( 'Enddate' )
 	price = fields.Float( 'Price' )
+	resource_ids = fields.Many2many( comodel_name='membership_lite.resource',
+                        relation='resource_profile_rel',
+                        column1='profile_id',
+                        column2='resource_id', string="Included resources" )
 
 class membership_line(models.Model):
 	_name = 'membership_lite.membership_line'
@@ -190,6 +194,25 @@ class Partner(models.Model):
 
 			member.credit_status = in_amount - out_amount
 
+	def is_included( self, cr, uid, vals, context=None ):
+		user_id = vals['user']
+		resource_id = vals['resource']
+
+		user = self.browse(cr, uid, user_id, context=None)
+		if not user:
+			return False
+
+		for line in user.ml_membership_lines:
+			today = datetime.today().date();
+			start = datetime.strptime(line.ml_start, '%Y-%m-%d').date()
+			end = datetime.strptime(line.ml_end, '%Y-%m-%d').date()
+			if start <= today and end >= today:
+				for resource in line.ml_profile.resource_ids:
+					if resource.booking_ok and resource.id == resource_id:
+						return True
+
+		return False
+
 	def authenticate_web_user( self, cr, uid, vals, context=None ):
 		_logger = logging.getLogger(__name__)
 		uname = vals['uname']
@@ -264,13 +287,17 @@ class Partner(models.Model):
 			end = datetime.strptime(line.ml_end, '%Y-%m-%d').date()
 			if start <= today and end >= today:
 				is_current = True
+			includes = []
+			for i in line.ml_profile.resource_ids:
+				includes.append(i.name)
 			rm_lines.append({
 				'date': line.date,
 				'profile': line.ml_profile.name,
 				'price': line.ml_price,
 				'start': line.ml_start,
 				'end': line.ml_end,
-				'is_current': is_current
+				'is_current': is_current,
+				'includes': includes
 			})
 		for line in c_lines:
 			rc_lines.append({
@@ -318,7 +345,6 @@ class membership_resource(models.Model):
 			i += 1
 		res['end_date'] = str(today)
 		res['disabled'] = disabled
-		_logger.info(res)
 
 		return res
 
@@ -352,10 +378,28 @@ class membership_resource(models.Model):
 		date = datetime.strptime(date_str, '%Y-%m-%d')
 		dow = date.weekday()
 
-		resource_ids = self.search( cr, uid, [('booking_ok', '=', True)], context=context )
-		if not resource_ids:
+		if not vals['user']:
+			return {}
+		user = self.pool.get('res.partner').browse(cr, uid, vals['user'], context=None)
+		if not user:
 			return {}
 
+		if user.ml_membership_status not in ['paid', 'free']:
+			return {}
+
+		resource_ids = []
+		for line in user.ml_membership_lines:
+			today = datetime.today().date();
+			start = datetime.strptime(line.ml_start, '%Y-%m-%d').date()
+			end = datetime.strptime(line.ml_end, '%Y-%m-%d').date()
+			if start <= today and end >= today:
+				for resource in line.ml_profile.resource_ids:
+					if resource.booking_ok:
+						resource_ids.append( resource.id )
+		#resource_ids = self.search( cr, uid, [('booking_ok', '=', True)], context=context )
+		if not resource_ids:
+			return {}
+		_logger.info("INITIAL RESOUCES: %s" % resource_ids )
 		res = []
 		oh_ids = self.pool.get('membership_lite.opening_hours').search(cr, uid, [('name', '=', str(dow))], context=context)
 		if oh_ids:
@@ -420,16 +464,19 @@ class membership_resource(models.Model):
 			return {'error': 'User not found'}
 
 		user_status = user.ml_membership_status
-		price_message = ''
-		price = 0
-		if user_status == 'free':
-			price_message = 'Price: Free'
-		elif user_status == 'paid':
-			price_message = 'Price: Included in membership'
-		else:
-			price_for_unit = resource.price_class.price * 0.5 / resource.price_class.length
-			price = price_for_unit
-			price_message = 'Price: ' + '{0:.2f}'.format(price_for_unit) + "€"
+		if user_status not in ['free', 'paid']:
+			return {'error': 'User has no packages active'}
+
+		#price_message = ''
+		#price = 0
+		#if user_status == 'free':
+		#	price_message = 'Price: Free'
+		#elif user_status == 'paid':
+		#	price_message = 'Price: Included in membership'
+		#else:
+		#	price_for_unit = resource.price_class.price * 0.5 / resource.price_class.length
+		#	price = price_for_unit
+		#	price_message = 'Price: ' + '{0:.2f}'.format(price_for_unit) + "€"
 
 		wh = []
 		oh_ids = self.pool.get('membership_lite.opening_hours').search(cr, uid, [('name', '=', str(dow))], context=context)
@@ -479,37 +526,145 @@ class membership_resource(models.Model):
 				end = hour['to']
 		res['day_start'] = start
 		res['day_end'] = end
-		res['hours'] = wh
-		res['price_message'] = price_message
-		res['price'] = price
+
+		#res['hours'] = wh
+		#res['price_message'] = price_message
+		#res['price'] = price
 
 		booked = []
 		booking_ids = self.pool.get('membership_lite.booking').search(cr, uid, [('resource_id', '=', resource_id), ('day', '=', date_str)], context=context)
-		if not booking_ids:
-			res['bookings'] = booked
-			return res
-		bookings = self.pool.get('membership_lite.booking').browse(cr, uid, booking_ids, context=context)
+		if booking_ids:
+			bookings = self.pool.get('membership_lite.booking').browse(cr, uid, booking_ids, context=context)
 
-		for booking in bookings:
-			booked.append({'from': booking.hour_from, 'to': booking.hour_to})
-		res['bookings'] = booked
-		_logger.info(res['bookings']);
+			for booking in bookings:
+				booked.append({'from': booking.hour_from, 'to': booking.hour_to})
+
+		day_hours = []
+		control = start
+		while control <= end:
+			tstart = control
+			control += 1
+			tend = control
+			is_open = False
+			for period in wh:
+				if tstart >= period['from'] and tend <= period['to']:
+					is_open = True
+					break
+			if not is_open:
+				day_hours.append({
+					'available': False,
+					'reason': 'closed',
+					'from': tstart,
+					'to': tend,
+					'price': 0,
+					'price_message': ''
+				})
+				continue
+			is_booked = False
+			for period in booked:
+				if tstart >= period['from'] and tend <= period['to']:
+					is_booked = True
+					break
+			if is_booked:
+				day_hours.append({
+					'available': False,
+					'reason': 'booked',
+					'from': tstart,
+					'to': tend,
+					'price': 0,
+					'price_message': ''
+				})
+				continue
+
+			price = self.pool.get('membership_lite.price_rule').get_price( cr, uid, {'start': tstart, 'end': tend, 'dow': dow, 'date': date}, context=None)
+			day_hours.append({
+				'available': True if price else False,
+				'reason': '' if price else 'Error getting price',
+				'from': tstart,
+				'to': tend,
+				'price': price if price else 0,
+				'price_message': 'Price: ' + '{0:.2f}'.format(price) + "€" if price else ''
+			})
+
+		res['hours'] = day_hours
 		return res
 
 	name = fields.Char( 'Name', required="1" )
 	desc = fields.Text( 'Description' )
-	price_class = fields.Many2one( 'membership_lite.price_class', string="Price class" )
 	xtype = fields.Selection([('exclusive', 'Exclusive'), ('shared', 'Shared')], string="Booking type", default="exclusive", required="1")
 	max_users = fields.Integer( 'Maximal number of users' )
 	booking_ok = fields.Boolean( 'Available for booking' )
 
-class membership_price_class(models.Model):
-	_name= "membership_lite.price_class"
+class membership_price_rule(models.Model):
+	_name= "membership_lite.price_rule"
 
-	name = fields.Char( 'Name', required="1" )
+	def get_price( self, cr, uid, vals, context=None ):
+		_logger = logging.getLogger(__name__)
+		start = vals['start']
+		end = vals['end']
+		dow = vals['dow']
+		date = vals['date']
+
+		times = []
+		if end - start > 1:
+			cnt = start
+			while cnt <= end:
+				xstart = cnt
+				cnt += 1
+				xend = cnt
+				times.append({'start': xstart, 'end': xend})
+		else:
+			times.append({'start': start, 'end': end})
+
+		rule_ids = self.search(cr, uid, [('active', '=', True)], context=None)
+		if not rule_ids:
+			return False
+		rules = self.browse(cr, uid, rule_ids, context=None)
+		total_price = 0
+		for time in times:
+			applying_rules = []
+			date_bound = False
+			for rule in rules:
+				if rule.date == date:
+					if not date_bound:
+						date_bound = True
+						applying_rules = []
+					applying_rules.append(rule)
+					continue
+				if rule.name == str(dow) and not date_bound:
+					applying_rules.append(rule)
+					continue
+			price = False
+			for rule in applying_rules:
+				if not rule.hour_from and not rule.hour_to:
+					price = rule.price
+				if rule.hour_from and not rule.hour_to and rule.hour_from <= time['start']:
+					price = rule.price
+				if not rule.hour_from and rule.hour_to and rule.hour_to >= time['end']:
+					price = rule.price
+				if rule.hour_from and rule.hour_to and rule.hour_from <= time['start'] and rule.hour_to >= time['end']:
+					price = rule.price
+
+			total_price += price
+
+		return total_price
+
+
+	name = fields.Selection([('0','Monday'),('1','Tuesday'),('2','Wednesday'),('3','Thursday'),('4','Friday'),('5','Saturday'),('6','Sunday')], string="Day of week", required="1")
+	hour_from = fields.Float(string="Hour from")
+	hour_to = fields.Float(string="Hour to")
+	date = fields.Date(string="Date")
 	desc = fields.Text( 'Description' )
-	length = fields.Float( string='Duration', default=1 )
 	price = fields.Float( string='Price' )
+	active = fields.Boolean( 'Active', default=True )
+
+class membership_long_booking(models.Model):
+	_name = "membership_lite.long_booking"
+
+	duration = fields.Integer( 'Duration in months' )
+	price = fields.Float( 'Price (for 1h)' )
+	xtype = fields.Selection([('daily', 'Daily'), ('weekly', 'Weekly'), ('monthly', 'Monthly')], default="weekly", required="1", string="Type" )
+	min_booking = fields.Integer( string='Mininal booking time (in h)', default=1 )
 
 class membership_opening_hours(models.Model):
 	_name = "membership_lite.opening_hours"
@@ -543,7 +698,7 @@ class membership_booking(models.Model):
 		user_id = vals['user'] if 'user' in vals else None
 
 		if not date or not resource or not t_from or not t_to or not user_id:
-			return {'error': 'Incomplete date'}
+			return {'error': 'Incomplete data'}
 
 		resource_id = int(resource)
 		resource = self.pool.get('membership_lite.resource').browse(cr, uid, resource_id, context=None)
@@ -559,34 +714,55 @@ class membership_booking(models.Model):
 			return {'error': 'User doesnt exist'}
 		user = user[0]
 
+		if not self.pool.get('res.partner').is_included(cr, uid, {'user': user.id, 'resource': resource.id}, context=None):
+			return {'error': 'User cannot access the resource or its not available for booking'}
+
 		hours = self.pool.get('membership_lite.resource').get_hours(cr, uid, {'user': user.id, 'date': date, 'resource': resource_id}, context=None)
 		if not hours:
 			return {'error': 'Failure to retrieve hours!'}
 		oh = hours['hours']
-		booking = hours['bookings']
-		available = False
-		for h in oh:
-			if t_from >= h['from'] and t_to <= h['to']:
-				available = True
+		duration = t_to - t_from
+
+		hours_to_check = []
+		if duration > 1:
+			cnt = t_from
+			while cnt <= t_to:
+				xstart = cnt
+				cnt += 1
+				xend = cnt
+				hours_to_check.append({'start': xstart, 'end': xend})
+		else:
+			hours_to_check.append({'start': t_from, 'end': t_end})
+		available = True
+		for hour in hours_to_check:
+			found = False
+			for h in oh:
+				if hour['start'] >= h['from'] and hour['end'] <= h['to']:
+					found = True
+					if not h['available']:
+						available = False
+						break
+			if not found:
+				available = False
+				break
+			if not available:
+				break
 		if not available:
 			return {'error': 'This time is not available'}
 
-		for b in booking:
-			if ( t_from >= b['from'] and t_from < b['to'] ) or ( t_to <= b['to'] and t_to > b['to'] ):
-				return {'error': 'This time is not available'}
 
-		duration = t_to - t_from
-		halves = duration / 0.5
 		transaction_amount = None
 		#check member for Payment
 		member_status = user.ml_membership_status
-		_logger.info("MEMBER STATUS: %s" % member_status)
-		if member_status not in ['free', 'paid']:
+
+		if member_status is not 'free':
 			credit_status = user.credit_status
-			price = resource.price_class.price
-			length = resource.price_class.length
-			price_per_half = price * 0.5 / length
-			price_for_session = price_per_half * halves
+			date_date = datetime.strptime(date, '%Y-%m-%d')
+			dow = date_date.weekday()
+			price = self.pool.get('membership_lite.price_rule').get_price( cr, uid, {'start': t_from, 'end': t_to, 'dow': dow, 'date': date_date}, context=None)
+			if not price:
+				return {'error': 'Price couldnt be retrieved'}
+			price_for_session = price
 			_logger.info("PRICE FOR THIS: %s" % price_for_session)
 			if credit_status - price_for_session < 0:
 				return {'error': 'Not enough credit for this'}
@@ -594,7 +770,7 @@ class membership_booking(models.Model):
 			purchase_vals = {
 				'member': user.id,
 				'ml_amount': price_for_session,
-				'ml_note': 'Purchase of %sh time for %s' % (length, resource.name),
+				'ml_note': 'Purchase of %sh time for %s' % (duration, resource.name),
 				'ml_direction': 'out'
 			}
 			rc_line = self.pool.get('membership_lite.credit_line').create( cr, uid, purchase_vals, context=None)
@@ -609,7 +785,7 @@ class membership_booking(models.Model):
 			'hour_from': t_from,
 			'hour_to': t_to,
 			'resource_id': resource_id,
-			'note': '' #IMPLEMENT
+			'note': ''
 		}
 		success = self.create(cr, uid, new_vals, context=None)
 		if not success:
