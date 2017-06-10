@@ -116,6 +116,7 @@
 			                            <group>
 																			<field name="ml_web_user" />
 																			<field name="ml_web_pass" />
+																			<field name="ml_rfid" />
 			                                <field name="ml_membership_start" attrs="{'invisible':[('ml_membership_start','=',False)]}"/>
 			                                <field name="ml_membership_end" attrs="{'invisible':[('ml_membership_end','=',False)]}"/>
 			                            </group>
@@ -258,6 +259,8 @@
 													<field name="xtype"/>
 													<field name="max_users"/>
 													<field name="booking_ok"/>
+													<field name="switch_id"/>
+													<field name="allow_access_before"/>
 			                </tree>
 			            </field>
 			        </record>
@@ -544,6 +547,45 @@
 
 							<menuitem name="Bookings" id="menu_bookings" sequence="1" parent="menu_membership"/>
 							<menuitem name="Bookings" id="menu_bookings_bookings" sequence="1" parent="menu_bookings" action="action_membership_booking"/>
+
+							<record model="ir.actions.act_window" id="action_membership_domoticz">
+			            <field name="name">Domoticz</field>
+			            <field name="res_model">membership_lite.domoticz</field>
+									<field name="view_model">tree</field>
+			            <field name="context">{}</field>
+			            <field name="help" type="html">
+			                <p class="oe_view_nocontent_create">
+			                  Click to add a device on domoticz
+			                </p>
+			            </field>
+			        </record>
+
+
+
+							<record model="ir.ui.view" id="membership_domoticz_form">
+			            <field name="name">Devices</field>
+			            <field name="model">membership_lite.domoticz</field>
+			            <field name="arch" type="xml">
+			                <form string="Devices">
+												<group>
+			                    <field name="name"/>
+													<field name="url"/>
+													<field name="impuls"/>
+												</group>
+
+			                </form>
+			            </field>
+			        </record>
+
+							<record model="ir.actions.act_window.view" id="action_membership_domoticz_view_form">
+			            <field name="sequence" eval="2"/>
+			            <field name="view_mode">form</field>
+			            <field name="view_id" ref="membership_domoticz_form"/>
+			            <field name="act_window_id" ref="action_membership_domoticz"/>
+			        </record>
+
+							<menuitem name="Domoticz" id="menu_domoticz" sequence="1" parent="menu_membership"/>
+							<menuitem name="Devices" id="menu_devices" sequence="1" parent="menu_domoticz" action="action_membership_domoticz"/>
 
 		</data>
 </openerp>
