@@ -295,7 +295,7 @@ class membership_resource(models.Model):
 		res['day_end'] = end
 
 		booked = []
-		booking_ids = self.pool.get('membership_lite.booking').search(cr, uid, [('resource_id', '=', resource_id), ('day', '=', date_str)], context=context)
+		booking_ids = self.pool.get('membership_lite.booking').search(cr, uid, [('resource_id', '=', resource_id), ('day', '=', date_str), ('resource_id.xtype', '=', 'exclusive')], context=context)
 		if booking_ids:
 			bookings = self.pool.get('membership_lite.booking').browse(cr, uid, booking_ids, context=context)
 
@@ -448,6 +448,7 @@ class membership_long_booking(models.Model):
 	price = fields.Float( 'Price (for 1h)' )
 	xtype = fields.Selection([('day', 'Daily'), ('week', 'Weekly'), ('month', 'Monthly')], default="week", required="1", string="Type" )
 	min_booking = fields.Integer( string='Mininal booking time (in h)', default=1 )
+	active = fields.Boolean( string='Active', default=True )
 
 class membership_opening_hours(models.Model):
 	_name = "membership_lite.opening_hours"
