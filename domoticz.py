@@ -21,7 +21,6 @@ class membership_lite_domoticz(models.Model):
 		if not member_id:
 			return {'error': 'No member with such RFID'}
 		member_id = member_id[0]
-		member = self.pool.get('res.partner').browse(cr, uid, member_id, context=None)
 		time_now = datetime.now().time()
 		date_now = datetime.now().date()
 		ftime = float(time_now.minute) * 100 / 60 / 100 + float(time_now.hour)
@@ -38,14 +37,41 @@ class membership_lite_domoticz(models.Model):
 			_logger.info("ALLOW BEFORE: %s - %s" % (ftime, booking.hour_from - allow_before))
 			if ftime >= booking.hour_from - allow_before and ftime < booking.hour_to:
 				command = booking.resource_id.switch_id.url
-				response = urllib2.urlopen(command)
-				_logger.info(response)
+				import urllib2, base64
 
-		if command:
-			return 1
-		else:
-			return 0
+				request = urllib2.Request(command)
+				base64string = base64.b64encode('%s:%s' % ('antonio', 'lapenna'))
+				request.add_header("Authorization", "Basic %s" % base64string)
+				result = urllib2.urlopen(request)
+				code = result.getcode()
+				_logger.info(code);
+				xv = {
+					'member_id': booking.member_id.id,
+					'resource_id': booking.resource_id.id,
+					'booking_id': booking.id,
+					'status': str( code )
+				}
+				access_entry = self.pool.get('membership_lite.domoticz_access').create(cr, uid, xv, context=None)
+				if code == 200:
+					if not access_entry:
+						return {'success': '1', 'warning': 'Gate opened but log not created'}
+					return {'success': '1'}
+				else:
+					if not access_entry:
+						return {'success': '0', 'warning': 'Gate not opened and log not created'}
+					return {'success': '0'}
+
+		return {'success': '0'}
 
 	name = fields.Char( 'Name' )
 	url = fields.Char( 'URL', required=True )
 	impuls = fields.Boolean( 'Impuls', help='Give only 1 second impuls' )
+
+class membership_lite_domoticz_access(models.Model):
+	_name = 'membership_lite.domoticz_access'
+
+	member_id = fields.Many2one( 'res.partner', string='Member' )
+	resource_id = fields.Many2one( 'membership_lite.resource', string='Resource' )
+	booking_id = fields.Many2one( 'membership_lite.booking', string='Booking' )
+	date = fields.Datetime( string='Date and time', default=datetime.now() )
+	status = fields.Selection([('200', 'OK'), ('404', 'Domoticz not found'), ('403', 'Access to domoticz denied'), ('500', 'Internal error on domoticz')], string='Status')

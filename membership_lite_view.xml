@@ -249,6 +249,30 @@
 			            </field>
 			        </record>
 
+							<record model="ir.ui.view" id="membership_resources_form">
+			            <field name="name">Resources</field>
+			            <field name="model">membership_lite.resource</field>
+			            <field name="arch" type="xml">
+			                <form string="Resource">
+												<group string='Name'>
+			                    <field name="name"/>
+			                    <field name="desc"/>
+												</group>
+												<group col='2'>
+													<group string='Booking'>
+														<field name="booking_ok" />
+				                    <field name="xtype" attrs="{'invisible': [('booking_ok', '=', False)]}"/>
+														<field name="max_users" attrs="{'invisible': [('booking_ok', '=', False), ('xtype', '=', 'exclusive')]}" />
+													</group>
+													<group string="Domoticz">
+														<field name="switch_id" />
+														<field name="allow_access_before" attrs="{'invisible': [('switch_id', '=', False)]}"/>
+													</group>
+												</group>
+			                </form>
+			            </field>
+			        </record>
+
 							<record model="ir.ui.view" id="membership_resources_tree">
 			            <field name="name">Resources</field>
 			            <field name="model">membership_lite.resource</field>
@@ -272,12 +296,12 @@
 			            <field name="act_window_id" ref="action_membership_resources"/>
 			        </record>
 
-							<!--<record model="ir.actions.act_window.view" id="action_membership_resources_view_form">
+							<record model="ir.actions.act_window.view" id="action_membership_resources_view_form">
 			            <field name="sequence" eval="2"/>
 			            <field name="view_mode">form</field>
 			            <field name="view_id" ref="membership_resources_form"/>
 			            <field name="act_window_id" ref="action_membership_resources"/>
-			        </record>-->
+			        </record>
 
 							<menuitem name="Resource management" id="menu_resource_cat" sequence="1" parent="menu_membership"/>
 							<menuitem name="Resources" id="menu_resources" sequence="1" parent="menu_resource_cat" action="action_membership_resources"/>
@@ -586,6 +610,42 @@
 
 							<menuitem name="Domoticz" id="menu_domoticz" sequence="1" parent="menu_membership"/>
 							<menuitem name="Devices" id="menu_devices" sequence="1" parent="menu_domoticz" action="action_membership_domoticz"/>
+
+							<record model="ir.actions.act_window" id="action_membership_domoticz_access">
+			            <field name="name">Domoticz access log</field>
+			            <field name="res_model">membership_lite.domoticz_access</field>
+									<field name="view_model">tree</field>
+			            <field name="context">{}</field>
+			        </record>
+
+
+
+							<record model="ir.ui.view" id="membership_domoticz_access_form">
+			            <field name="name">Access log</field>
+			            <field name="model">membership_lite.domoticz_access</field>
+			            <field name="arch" type="xml">
+			                <form string="Access">
+												<group>
+			                    <field name="member_id"/>
+													<field name="resource_id"/>
+													<field name="booking_id"/>
+													<field name="date"/>
+													<field name="status"/>
+
+												</group>
+
+			                </form>
+			            </field>
+			        </record>
+
+							<record model="ir.actions.act_window.view" id="action_membership_domoticz_access_view_form">
+			            <field name="sequence" eval="2"/>
+			            <field name="view_mode">form</field>
+			            <field name="view_id" ref="membership_domoticz_access_form"/>
+			            <field name="act_window_id" ref="action_membership_domoticz_access"/>
+			        </record>
+
+							<menuitem name="Access log" id="menu_access" sequence="1" parent="menu_domoticz" action="action_membership_domoticz_access"/>
 
 		</data>
 </openerp>
