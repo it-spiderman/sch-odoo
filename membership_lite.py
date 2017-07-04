@@ -381,14 +381,13 @@ class membership_price_rule(models.Model):
 		times = []
 		if end - start > 1:
 			cnt = start
-			while cnt <= end:
+			while cnt < end:
 				xstart = cnt
 				cnt += 1
 				xend = cnt
 				times.append({'start': xstart, 'end': xend})
 		else:
 			times.append({'start': start, 'end': end})
-		_logger.info(times)
 
 		rule_ids = self.search(cr, uid, [('active', '=', True)], context=None)
 		if not rule_ids:
