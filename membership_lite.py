@@ -352,7 +352,7 @@ class membership_resource(models.Model):
 				'from': tstart,
 				'to': tend,
 				'price': price if price else 0,
-				'price_message': 'Price: ' + '{0:.2f}'.format(price) + "€" if price else '',
+				'price_message': 'Prezzo: ' + '{0:.2f}'.format(price) + "€" if price else '',
 				'lprice': long_price if long_price else 0,
 				'lprice_message': lmessage if lmessage else ''
 			})
@@ -388,6 +388,7 @@ class membership_price_rule(models.Model):
 				times.append({'start': xstart, 'end': xend})
 		else:
 			times.append({'start': start, 'end': end})
+		_logger.info(times)
 
 		rule_ids = self.search(cr, uid, [('active', '=', True)], context=None)
 		if not rule_ids:
