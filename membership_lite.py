@@ -441,12 +441,12 @@ class membership_long_booking(models.Model):
 		lbs = self.browse(cr, uid, lb_ids, context=None)
 		lb = lbs[0]
 
-		message = "Book this time for every %s for the next %s month(s)" % ( lb.xtype, lb.duration )
+		message = "Prenota questo orario per ogni %s per %s messi" % ( lb.xtype, lb.duration )
 		return lb.price, message
 
 	duration = fields.Integer( 'Duration in months' )
 	price = fields.Float( 'Price (for 1h)' )
-	xtype = fields.Selection([('day', 'Daily'), ('week', 'Weekly'), ('month', 'Monthly')], default="week", required="1", string="Type" )
+	xtype = fields.Selection([('giorno', 'Daily'), ('settimana', 'Weekly'), ('messe', 'Monthly')], default="settimana", required="1", string="Type" )
 	min_booking = fields.Integer( string='Mininal booking time (in h)', default=1 )
 	active = fields.Boolean( string='Active', default=True )
 
