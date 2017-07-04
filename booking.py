@@ -31,13 +31,13 @@ class membership_booking(models.Model):
 		current_date = date_date
 		while current_date <= end_date:
 			dates.append( current_date )
-			if lb.xtype == 'day':
+			if lb.xtype == 'giorno':
 				current_date = current_date + timedelta(days=1)
 				continue
-			if lb.xtype == 'week':
+			if lb.xtype == 'settimana':
 				current_date = current_date + timedelta(weeks=1)
 				continue
-			if lb.xtype == 'month':
+			if lb.xtype == 'messe':
 				current_date = current_date + timedelta(days=365/12)
 				continue
 
