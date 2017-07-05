@@ -13,7 +13,7 @@ class membership_booking(models.Model):
 	def make_long_booking( self, cr, uid, vals, context= None):
 		_logger = logging.getLogger(__name__)
 		if 'long' not in vals:
-			return {'error': 'Long booking failed'}
+			return {'error': 'Prenotazione lunga fallita'}
 
 		date = vals['date'] if 'date' in vals else None
 		dates = []
@@ -56,7 +56,7 @@ class membership_booking(models.Model):
 		if are_errors:
 			self.pool.get('membership_lite.booking').unlink(cr, uid, created_ids, context=None)
 			_logger.info("DELETING")
-			return {'error': 'Long term booking could not be made'}
+			return {'error': 'Non è possibile prenotare a lungo termine'}
 		_logger.info('SUCCESS %s' % created_ids)
 
 		return {
@@ -65,7 +65,7 @@ class membership_booking(models.Model):
 			'from': '',
 			'to':'',
 			'resource': '',
-			'note': "Created long term booking once a %s from %s to %s" % (lb.xtype, date_date.strftime( '%Y-%m-%d' ), end_date.strftime( '%Y-%m-%d' )),
+			'note': "Creata una prenotazione %s da %s a %s" % (lb.xtype, date_date.strftime( '%Y-%m-%d' ), end_date.strftime( '%Y-%m-%d' )),
 			'long': 1
 		}
 
@@ -176,7 +176,7 @@ class membership_booking(models.Model):
 				rolled_back = self.pool.get('membership_lite.credit_line').unlink( cr, uid, rc_line, context=None)
 				if not rolled_back:
 					self.unlink(cr, uid, success, context=None)
-			return {'error': 'Creating booking did not succeed'}
+			return {'error': 'La creazione della prenotazione è fallita'}
 		new_booking = self.browse( cr, uid, success, context=None)
 
 		return {

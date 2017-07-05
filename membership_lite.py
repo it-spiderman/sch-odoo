@@ -316,7 +316,7 @@ class membership_resource(models.Model):
 			if not is_open:
 				day_hours.append({
 					'available': False,
-					'reason': 'closed',
+					'reason': 'Chiusa',
 					'from': tstart,
 					'to': tend,
 					'price': 0,
@@ -333,7 +333,7 @@ class membership_resource(models.Model):
 			if is_booked:
 				day_hours.append({
 					'available': False,
-					'reason': 'booked',
+					'reason': 'Prenotato',
 					'from': tstart,
 					'to': tend,
 					'price': 0,
