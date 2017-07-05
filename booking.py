@@ -56,7 +56,7 @@ class membership_booking(models.Model):
 		if are_errors:
 			self.pool.get('membership_lite.booking').unlink(cr, uid, created_ids, context=None)
 			_logger.info("DELETING")
-			return {'error': 'Non è possibile prenotare a lungo termine'}
+			return {'error': 'Non e possibile prenotare a lungo termine'}
 		_logger.info('SUCCESS %s' % created_ids)
 
 		return {
